@@ -2,6 +2,8 @@ from socket import *
 
 from threading import Thread
 
+from time import sleep
+
 
 serverPort = 12000
 
@@ -12,6 +14,7 @@ print('The server is ready to receive')
 
 rcv_base = 0  # next sequence number we wait for
 
+max_packet_num = 10000
 
 queueing_delay = 500000
 
@@ -40,10 +43,11 @@ class QueueItem:
         global queue_size
         global program_over
         global system_time
+        global max_packet_num
         queue_size -= 1
         print("Seq n : %d, Queue Items : %d" % (seq_n, queue_size))
-        if seq_n >= 999 and queue_size < 1:
-            program_over = True
+        #if seq_n >= max_packet_num - 1 and queue_size < 1:
+        #    program_over = True
         if self.next is not None:
             self.next.arrival_time = system_time
         print("Restored From Queue, Arrival At %d, now %d" % (self.arrival_time, system_time))
@@ -53,14 +57,15 @@ class QueueItem:
     def passed_queue(self):
         global system_time
         global queueing_delay
-        return system_time - self.arrival_time >= queueing_delay
+        return True
+    #system_time - self.arrival_time >= queueing_delay
 
 
 
 
 
 
-
+# 새로은 쓰레드를 만들어서 큐를 읽습니다. 큐 딜레이 구현을 위해, 한번 큐를 읽고 나면 대기 시간을 가집니다.
 def queue_manager():
     global system_time
     global queue_head
@@ -71,6 +76,8 @@ def queue_manager():
         if queue_head is not None:
             if queue_head.passed_queue():
                 queue_head = queue_head.ack()
+
+        sleep(0.01)
 
 
 

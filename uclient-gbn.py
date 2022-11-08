@@ -7,8 +7,9 @@ serverIP = '127.0.0.1' # special IP for local host
 serverPort = 12000
 clientPort = 12001
 
-win = 10      # window size
-no_pkt = 1000 # the total number of packets to send
+win = 10.0      # window size
+timeout_interval = 10 # timeout interval
+no_pkt = 10000 # the total number of packets to send
 send_base = 0 # oldest packet sent
 loss_rate = 0.01 # loss rate
 seq = 0        # initial sequence number
@@ -19,7 +20,7 @@ global_rtt = 0
 
 timeout_cnt = 0
 
-sent_time = [0 for i in range(2000)]
+sent_time = [0 for i in range(no_pkt * 2)]
 
 
 clientSocket = socket(AF_INET, SOCK_DGRAM)
@@ -27,6 +28,25 @@ clientSocket.bind(('', clientPort))
 clientSocket.setblocking(0)
 
 # thread for receiving and handling acks
+
+def onAfterTimeOut():
+
+    global win
+    if win > 2 :
+        win = win / 2
+
+    return
+
+def winSlowStartStep():
+    global win
+    win = win + 1 / win
+
+def printSeqWithStatus(seq):
+    global win
+    global timeout_interval
+    if seq % 10 != 0 :
+        return
+    print("SEQ %4d | WIN %3d | TO ITV %5f" % (seq, win, timeout_interval))
 def handling_ack():
     print("thread")
     global clientSocket
@@ -36,7 +56,7 @@ def handling_ack():
 
     alpha = 0.125
     beta = 0.25
-    timeout_interval = 10  # timeout interval
+    global timeout_interval # timeout interval
 
 
     pkt_delay = 0
@@ -60,10 +80,12 @@ def handling_ack():
             print("timeout ratio : %f" % (timeout_cnt/ seq))
             timeout_flag = 1
 
+            onAfterTimeOut()
+
         try:
             ack, serverAddress = clientSocket.recvfrom(2048)
             ack_n = int(ack.decode())
-            print(ack_n, flush=True)
+            printSeqWithStatus(ack_n)
 
             if init_rtt_flag == 1:
                 estimated_rtt = pkt_delay
@@ -71,6 +93,8 @@ def handling_ack():
             else:
                 estimated_rtt = (1-alpha) * estimated_rtt + alpha*pkt_delay
                 dev_rtt = (1-beta)*dev_rtt + beta*abs(pkt_delay-estimated_rtt)
+
+            winSlowStartStep()
 
             global global_rtt
             global_rtt = estimated_rtt
@@ -86,7 +110,7 @@ def handling_ack():
         # window stays for cumulative ack
         send_base = ack_n + 1
 
-        if ack_n == 999:
+        if ack_n == no_pkt - 1:
             break;
 
 # running a thread for receiving and handling acks
