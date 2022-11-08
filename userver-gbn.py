@@ -5,7 +5,11 @@ from threading import Thread
 from time import sleep
 
 
+#const
+
 serverPort = 12000
+max_packet_num = 10000
+queueing_delay = 0.003
 
 serverSocket = socket(AF_INET, SOCK_DGRAM)
 serverSocket.bind(('', serverPort))
@@ -14,9 +18,7 @@ print('The server is ready to receive')
 
 rcv_base = 0  # next sequence number we wait for
 
-max_packet_num = 10000
 
-queueing_delay = 500000
 
 queue_maxsize = 10
 
@@ -70,6 +72,7 @@ def queue_manager():
     global system_time
     global queue_head
     global program_over
+    global queueing_delay
     while not program_over:
 
         system_time += 1
@@ -77,7 +80,7 @@ def queue_manager():
             if queue_head.passed_queue():
                 queue_head = queue_head.ack()
 
-        sleep(0.01)
+        sleep(queueing_delay)
 
 
 
