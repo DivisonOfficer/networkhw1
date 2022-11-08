@@ -3,35 +3,31 @@ from threading import Thread
 import random
 import time
 
+#const
+
 serverIP = '127.0.0.1' # special IP for local host
 serverPort = 12000
 clientPort = 12001
 
+
+no_pkt = 10000 # the total number of packets to send
+loss_rate = 0.01 # loss rate
+expire_count_max = 100000 # wait time for no response
+
+
+#global feature
 win = 10.0      # window size
 max_win_size = 0
 avg_win_size = 0
-timeout_interval = 10 # timeout interval
-
-
-#const
-no_pkt = 10000 # the total number of packets to send
 send_base = 0 # oldest packet sent
-loss_rate = 0.01 # loss rate
-expire_count_max = 100000
-
-
+timeout_interval = 10 # timeout interval
 seq = 0        # initial sequence number
 timeout_flag = 0 # timeout trigger
-
-expire_count = 0
-
-
-global_rtt = 0
-
-timeout_cnt = 0
+expire_count = 0 # if no response from server, exit program.
+global_rtt = 0 # record average rtt
+timeout_cnt = 0 # record occurance of timeout
 
 sent_time = [0 for i in range(no_pkt * 2)]
-
 
 clientSocket = socket(AF_INET, SOCK_DGRAM)
 clientSocket.bind(('', clientPort))
@@ -51,7 +47,16 @@ def winSlowStartStep(seq):
     global win
     global avg_win_size
     global max_win_size
+
+    #slow
     win = win + 1 / win
+
+    #fast until max size
+    if win < max_win_size:
+        win = win + (max_win_size - win) / win
+        if win > max_win_size:
+            win = max_win_size
+
 
     if win > max_win_size:
         max_win_size = win
