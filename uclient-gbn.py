@@ -8,12 +8,22 @@ serverPort = 12000
 clientPort = 12001
 
 win = 10.0      # window size
+max_win_size = 0
+avg_win_size = 0
 timeout_interval = 10 # timeout interval
+
+
+#const
 no_pkt = 10000 # the total number of packets to send
 send_base = 0 # oldest packet sent
 loss_rate = 0.01 # loss rate
+expire_count_max = 100000
+
+
 seq = 0        # initial sequence number
 timeout_flag = 0 # timeout trigger
+
+expire_count = 0
 
 
 global_rtt = 0
@@ -37,9 +47,17 @@ def onAfterTimeOut():
 
     return
 
-def winSlowStartStep():
+def winSlowStartStep(seq):
     global win
+    global avg_win_size
+    global max_win_size
     win = win + 1 / win
+
+    if win > max_win_size:
+        max_win_size = win
+
+    avg_win_size = avg_win_size + (win - avg_win_size) / (seq + 1)
+
 
 def printSeqWithStatus(seq):
     global win
@@ -81,7 +99,8 @@ def handling_ack():
             timeout_flag = 1
 
             onAfterTimeOut()
-
+        global expire_count
+        global expire_count_max
         try:
             ack, serverAddress = clientSocket.recvfrom(2048)
             ack_n = int(ack.decode())
@@ -93,8 +112,8 @@ def handling_ack():
             else:
                 estimated_rtt = (1-alpha) * estimated_rtt + alpha*pkt_delay
                 dev_rtt = (1-beta)*dev_rtt + beta*abs(pkt_delay-estimated_rtt)
-
-            winSlowStartStep()
+            expire_count = 0
+            winSlowStartStep(ack_n)
 
             global global_rtt
             global_rtt = estimated_rtt
@@ -104,6 +123,11 @@ def handling_ack():
 
 
         except BlockingIOError:
+            expire_count += 1
+
+            if expire_count > expire_count_max:
+                return
+
             continue
 
         # window is moved upon receiving a new ack
@@ -140,6 +164,7 @@ th_handling_ack.join() # terminating thread
 
 print ("done")
 print ("Mean RTT : %f" % global_rtt)
+print ("MAX WIN SIZE : %d \nAVG WIN SIZE : %2f" % (max_win_size, avg_win_size))
 
 clientSocket.close()
 
