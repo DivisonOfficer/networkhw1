@@ -27,6 +27,9 @@ expire_count = 0 # if no response from server, exit program.
 global_rtt = 0 # record average rtt
 timeout_cnt = 0 # record occurance of timeout
 
+ack_dict = dict() # Check 3 duplicate Ack
+
+
 sent_time = [0 for i in range(no_pkt * 2)]
 
 clientSocket = socket(AF_INET, SOCK_DGRAM)
@@ -63,6 +66,20 @@ def winSlowStartStep(seq):
 
     avg_win_size = avg_win_size + (win - avg_win_size) / (seq + 1)
 
+
+def check3dup(seq):
+    global ack_dict
+    if seq not in ack_dict:
+        ack_dict[seq] = 1
+    else :
+        ack_dict[seq] += 1
+    if seq-1 in ack_dict:
+        del ack_dict[seq-1]
+
+    if ack_dict[seq] >= 3:
+        ack_dict[seq] = 0
+        return True
+    return False
 
 def printSeqWithStatus(seq):
     global win
@@ -126,6 +143,10 @@ def handling_ack():
             timeout_interval = estimated_rtt + 4*dev_rtt
             #print("timeout interval:", str(timeout_interval), flush=True)
 
+            if check3dup(ack_n):
+                send_packet(ack_n + 1)
+
+
 
         except BlockingIOError:
             expire_count += 1
@@ -140,7 +161,14 @@ def handling_ack():
         send_base = ack_n + 1
 
         if ack_n == no_pkt - 1:
-            break;
+            break
+
+def send_packet(seq, rand = False):
+    global loss_rate
+    if not rand or random.random() < 1 - loss_rate :
+        clientSocket.sendto(str(seq).encode(), (serverIP, serverPort))
+    sent_time[seq] = time.time()
+
 
 # running a thread for receiving and handling acks
 th_handling_ack = Thread(target = handling_ack, args = ())
@@ -148,18 +176,18 @@ th_handling_ack.start()
 
 while seq < no_pkt:
     while seq < send_base + win: # send packets within window
-        if random.random() < 1 - loss_rate: # emulate packet loss
-            clientSocket.sendto(str(seq).encode(), (serverIP, serverPort))
+        send_packet(seq, True)
         sent_time[seq] = time.time()
         seq = seq + 1
 
     if timeout_flag == 1: # retransmission
         seq = send_base
-        clientSocket.sendto(str(seq).encode(), (serverIP, serverPort))
-        sent_time[seq] = time.time()
+        send_packet(seq)
         print("retransmission:", str(seq), flush=True)
         seq = seq + 1
         timeout_flag = 0
+
+
 
 
 th_handling_ack.join() # terminating thread
